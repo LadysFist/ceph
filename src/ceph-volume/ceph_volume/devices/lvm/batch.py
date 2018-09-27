@@ -62,7 +62,7 @@ def filestore_mixed_type(device_facts):
         return strategies.filestore.MixedType
 
 
-def get_strategy(args):
+def get_strategy(args, devices):
     """
     Given a set of devices as input, go through the different detection
     mechanisms to narrow down on a strategy to use. The strategies are 4 in
@@ -85,9 +85,9 @@ def get_strategy(args):
         strategies = filestore_strategies
 
     for strategy in strategies:
-        backend = strategy(args.devices)
+        backend = strategy(devices)
         if backend:
-            return backend(args.devices, args)
+            return backend(devices, args)
 
 
 class Batch(object):
@@ -128,7 +128,7 @@ class Batch(object):
         )
 
     def report(self, args):
-        strategy = get_strategy(args)
+        strategy = get_strategy(args, args.devices)
         if args.format == 'pretty':
             strategy.report_pretty()
         elif args.format == 'json':
@@ -137,7 +137,18 @@ class Batch(object):
             raise RuntimeError('report format must be "pretty" or "json"')
 
     def execute(self, args):
-        strategy = get_strategy(args)
+        strategy = get_strategy(args, args.devices)
+        unused_devices = [device for device in args.devices if not device.used_by_ceph]
+        if not unused_devices:
+            # report nothing changed
+            pass
+        else:
+            new_strategy = get_strategy(args, unused_devices)
+            if type(strategy) != type(new_strategy):
+                # error
+                pass
+            else:
+                strategy = new_strategy
         if not args.yes:
             strategy.report_pretty()
             terminal.info('The above OSDs would be created if the operation continues')
